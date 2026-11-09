@@ -1,0 +1,6 @@
+let WatchedApps = dynamic(__WatchedAppIds__);
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where isnotempty(OAuthAppId) and OAuthAppId in~ (WatchedApps)
+| summarize Events=count(), Resources=dcount(ObjectId), Accounts=dcount(AccountObjectId), FirstSeen=min(Timestamp), LastSeen=max(Timestamp), Operations=make_set(ActionType, 30) by OAuthAppId, Application, bin(Timestamp, 1h)
+| order by Timestamp desc

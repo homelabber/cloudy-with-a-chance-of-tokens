@@ -1,0 +1,9 @@
+let ProtectedAccounts = dynamic(__ProtectedAccountObjectIds__);
+let ProtectedResources = dynamic(__ProtectedResourceIds__);
+let ApprovedApps = dynamic(__ApprovedAppIds__);
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where AccountObjectId in~ (ProtectedAccounts) or ObjectId in (ProtectedResources)
+| where isempty(OAuthAppId) or OAuthAppId !in~ (ApprovedApps)
+| project Timestamp, ReportId, Application, ActionType, AccountObjectId, OAuthAppId, ObjectId, ObjectType, IPAddress, AuditSource
+| order by Timestamp desc

@@ -1,0 +1,14 @@
+// Event timestamps after a recorded cutoff warrant review; they do not prove successful access.
+let Cutoffs = print Records=dynamic(__RemediationRecords__)
+| mv-expand Records
+| project WatchedAppId=tostring(Records.OAuthAppId), RemediatedAt=todatetime(Records.RemediatedAt)
+| extend WatchedAppId=tolower(WatchedAppId)
+| summarize RemediatedAt=max(RemediatedAt) by WatchedAppId;
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where isnotempty(OAuthAppId)
+| extend WatchedAppId=tolower(OAuthAppId)
+| join kind=inner Cutoffs on WatchedAppId
+| where Timestamp > RemediatedAt
+| project Timestamp, ReportId, RemediatedAt, OAuthAppId, Application, ActionType, AccountObjectId, ObjectId, IPAddress, AuditSource
+| order by Timestamp desc

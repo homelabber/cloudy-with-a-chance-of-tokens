@@ -1,0 +1,25 @@
+// Alert creation time is a correlation anchor, not the time of the Teams contact.
+let ReviewedTitles = dynamic(__NativeTeamsAlertTitles__);
+let ToolNames = dynamic(__RemoteToolFileNames__);
+let ApprovedDevices = dynamic(__ApprovedSequenceDeviceIds__);
+let ImpactedAccounts = AlertEvidence
+| where Timestamp > ago(__CONTEXT_LOOKBACK__)
+| where EvidenceRole =~ "Impacted" and isnotempty(AccountObjectId)
+| project AlertId, CorrelationAccountId=tolower(AccountObjectId)
+| distinct AlertId, CorrelationAccountId;
+let TeamsAlerts = AlertInfo
+| where Timestamp > ago(__CONTEXT_LOOKBACK__)
+| where Title in~ (ReviewedTitles)
+| project SourceAlertId=AlertId, SourceAlertTitle=Title, AlertTimestamp=Timestamp
+| join kind=inner ImpactedAccounts on $left.SourceAlertId == $right.AlertId
+| project SourceAlertId, SourceAlertTitle, AlertTimestamp, CorrelationAccountId;
+DeviceProcessEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where FileName in~ (ToolNames)
+| where DeviceId !in (ApprovedDevices)
+| where isnotempty(AccountObjectId) and isnotempty(DeviceId) and isnotempty(ReportId)
+| extend CorrelationAccountId=tolower(AccountObjectId)
+| join kind=inner TeamsAlerts on CorrelationAccountId
+| where Timestamp >= AlertTimestamp and Timestamp <= AlertTimestamp + __SEQUENCE_WINDOW__
+| summarize arg_max(AlertTimestamp, *) by Timestamp, DeviceId, ReportId
+| project Timestamp, ReportId, DeviceId, DeviceName, AccountObjectId, AccountUpn, FileName, InitiatingProcessFileName, SourceAlertId, SourceAlertTitle, AlertTimestamp

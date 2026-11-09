@@ -1,0 +1,4 @@
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| summarize Events=count(), LastSeen=max(Timestamp), WithOAuthAppId=countif(isnotempty(OAuthAppId)), WithAccountId=countif(isnotempty(AccountObjectId)) by Application, ActionType, ActivityType, AccountType, AuditSource
+| order by Events desc

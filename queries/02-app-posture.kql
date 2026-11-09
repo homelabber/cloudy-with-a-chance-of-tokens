@@ -1,0 +1,5 @@
+OAuthAppInfo
+| where Timestamp > ago(30d)
+| summarize arg_max(Timestamp, *) by OAuthAppId
+| project SnapshotTime=Timestamp, OAuthAppId, ServicePrincipalId, AppName, AppStatus, AppOrigin, PrivilegeLevel, IsAdminConsented, RiskScore, LastUsedTime, Permissions, AssignedRoles
+| order by RiskScore desc

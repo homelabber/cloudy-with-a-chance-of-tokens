@@ -1,0 +1,21 @@
+{
+  "SchemaVersion": 1,
+  "TenantId": "",
+  "LookbackDays": 7,
+  "StaleAfterHours": 24,
+  "SequenceWindowMinutes": 120,
+  "NativeTeamsAlertTitles": [],
+  "RemoteToolFileNames": ["quickassist.exe", "msiexec.exe", "node.exe", "anydesk.exe", "teamviewer.exe"],
+  "ApprovedSequenceDeviceIds": [],
+  "ProtectedAccountObjectIds": [],
+  "ProtectedResourceIds": [],
+  "WatchedAppIds": [],
+  "ApprovedAppIds": [],
+  "MonitoredActionTypes": [],
+  "RemediationRecords": [],
+  "Reviews": {
+    "NativeCoverageReviewed": false,
+    "TeamsAlertMappingsVerified": false,
+    "ProtectedAccessMappingsVerified": false
+  }
+}

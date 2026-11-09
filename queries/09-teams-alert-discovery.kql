@@ -1,0 +1,10 @@
+// Discovery only: the title search is not a reliable detection criterion.
+let Evidence = AlertEvidence
+| where Timestamp > ago(__LOOKBACK__)
+| summarize EvidenceRoles=make_set(EvidenceRole, 10), WithAccountObjectId=countif(isnotempty(AccountObjectId)) by AlertId;
+AlertInfo
+| where Timestamp > ago(__LOOKBACK__)
+| where Title contains "Teams"
+| join kind=leftouter Evidence on AlertId
+| summarize Alerts=count(), WithAccountEvidence=countif(WithAccountObjectId > 0), Roles=make_set(EvidenceRoles, 20), LatestAlert=max(Timestamp) by Title, ServiceSource, DetectionSource
+| order by Alerts desc

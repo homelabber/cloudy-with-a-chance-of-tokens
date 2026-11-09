@@ -1,0 +1,82 @@
+{
+  "SchemaVersion": 1,
+  "ResearchAsOf": "2026-11-05",
+  "PublicationWindow": {"From":"2026-03-05","Through":"2026-11-05"},
+  "Purpose": "Primary-source observations supporting investigation and enrichment. These are not claims of missing Microsoft detections or proof of tenant telemetry availability.",
+  "Reports": [
+    {
+      "Id":"ms-2026-09-22",
+      "Published":"2026-09-22",
+      "Title":"Unmasking EvilTokens: Getting to the root of device code phishing",
+      "Url":"https://www.microsoft.com/en-us/security/blog/2026/09/22/unmasking-eviltokens-getting-to-the-root-of-device-code-phishing/",
+      "Attribution":"Storm-2992 develops/supports EvilTokens; do not attribute all customer intrusions to that actor.",
+      "Observed":"Device-code phishing, Microsoft Graph organizational discovery, compromised mailbox review, and in an observed incident email exfiltration and inbox-rule persistence; financial-authority users were targeted.",
+      "Visibility":"Supported cloud workload audit events and app metadata; authentication/token and detailed Graph activity require their respective telemetry. Not every Graph request is a CloudAppEvents row.",
+      "NativeOverlap":"Report lists device-code authentication, anomalous Graph activity after device-code phishing, and suspicious inbox-rule creation after device-code phishing detections.",
+      "Enhancement":"Protected business-resource and identity context; watched-app timelines. Protected-resource policy rule is a design inference, not a campaign-identifying signature.",
+      "QueryIds":["protected-access","app-timeline","alert-enrichment","watched-protected-access"]
+    },
+    {
+      "Id":"ms-2026-09-02",
+      "Published":"2026-09-02",
+      "Title":"Impersonating IT support: Threat actors turn remote session into enterprise-wide access",
+      "Url":"https://www.microsoft.com/en-us/security/blog/2026/09/02/impersonating-it-support-threat-actors-turn-remote-session-into-enterprise-wide-access/",
+      "Attribution":"Unnamed actor/campaign.",
+      "Observed":"External Teams contact impersonating IT support, a legitimate remote-support session, malicious MSI/Node.js implants, AD reconnaissance and WinRM toward domain controllers/certificate authorities.",
+      "Visibility":"Teams audit/alert evidence where supported; endpoint execution and identity pivots require MDE/identity telemetry. Cloud Apps alone cannot establish this entire chain.",
+      "NativeOverlap":"Report lists native suspicious external Teams chat, IT-support voice phishing and related dangerous-command alerts, plus endpoint/identity detections. Alert titles are illustrative and may vary.",
+      "Enhancement":"Bounded same-Entra-user alert-to-endpoint correlation. Uses alert creation time, not contact time; it does not detect or prove a remote session or Tier-0 pivot.",
+      "QueryIds":["teams-alert-discovery","teams-endpoint","alert-enrichment"]
+    },
+    {
+      "Id":"ms-2026-07-23",
+      "Published":"2026-07-23",
+      "Title":"Email threat landscape: Q2 2026 trends and insights",
+      "Url":"https://www.microsoft.com/en-us/security/blog/2026/07/23/email-threat-landscape-q2-2026-trends-and-insights/",
+      "Attribution":"Unnamed actors for the relevant OAuth-redirect and Teams examples; do not transfer attribution from other sections.",
+      "Observed":"June 15 OAuth error/redirect flow abuse involving an attacker-registered multitenant app delivered a batch-file malware payload. Teams impersonation also used generic and SaaS/update-themed identities.",
+      "Visibility":"Teams activity where collected. External app registration/redirect configuration is not necessarily present in the victim tenant; URL and endpoint evidence are needed for the delivery chain.",
+      "NativeOverlap":"Email/URL and endpoint detections are documented. No campaign-specific Cloud Apps detection was established by this research.",
+      "Enhancement":"Context for Teams hunting. OAuth redirect delivery remains a manual cross-product investigation lead, not a shipped detection or a claim of consent/token theft.",
+      "QueryIds":["teams-alert-discovery"]
+    },
+    {
+      "Id":"ms-2026-05-04",
+      "Published":"2026-05-04",
+      "ObservedPeriod":"2026-04-14 through 2026-04-16",
+      "Title":"Breaking the code: Multi-stage code of conduct phishing campaign leads to AiTM token compromise",
+      "Url":"https://www.microsoft.com/en-us/security/blog/2026/05/04/breaking-the-code-multi-stage-code-of-conduct-phishing-campaign-leads-to-aitm-token-compromise/",
+      "Attribution":"Unnamed attackers/campaign.",
+      "Observed":"Compliance-themed phishing through PDFs, CAPTCHA/staging pages and adversary-in-the-middle authentication capturing tokens.",
+      "Visibility":"Subsequent supported cloud activity and existing anomaly alerts. Token-risk and sign-in evidence require appropriate Entra telemetry.",
+      "NativeOverlap":"Report explicitly lists Cloud Apps impossible travel and Entra anomalous-token/unfamiliar-sign-in detections.",
+      "Enhancement":"Protected-account alert context and subsequent resource-access hunting. Downstream mailbox/Graph collection is not established by this report.",
+      "QueryIds":["protected-access","alert-enrichment"]
+    },
+    {
+      "Id":"ms-2026-11-05",
+      "Published":"2026-11-05",
+      "ObservedPeriod":"Q3 2026; salary-review campaign August 19-20",
+      "Title":"Email threat landscape: Q3 2026 trends and insights",
+      "Url":"https://www.microsoft.com/en-us/security/blog/2026/11/05/email-threat-landscape-q3-2026-trends-and-insights/",
+      "Attribution":"Unnamed actors for the relevant device-code and Teams examples.",
+      "Observed":"Salary-review lures used branded documents, QR codes, fake OneDrive pages and device-code authentication. Malicious Teams call attempts increasingly used ordinary personal names.",
+      "Visibility":"Supported subsequent cloud activity and Teams evidence. Device-code authentication requires identity telemetry; no campaign-specific Cloud Apps rule was verified.",
+      "NativeOverlap":"Report lists email/URL and endpoint protections; do not infer a Cloud Apps gap from an absent rule listing.",
+      "Enhancement":"Do not rely solely on helpdesk-themed names. Use reviewed native alerts and entity-linked endpoint context. Attempted calls are not successful contact; the described token-transfer mechanism is not proof every target completed sign-in.",
+      "QueryIds":["teams-alert-discovery","teams-endpoint"]
+    }
+  ],
+  "TechnicalReferences": [
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-cloudappevents-table",
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-oauthappinfo-table",
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-deviceprocessevents-table",
+    "https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-alertevidence-table",
+    "https://learn.microsoft.com/en-us/defender-cloud-apps/app-governance-anomaly-detection-alerts",
+    "https://learn.microsoft.com/en-us/defender-cloud-apps/anomaly-detection-policy",
+    "https://learn.microsoft.com/en-us/graph/api/security-security-runhuntingquery?view=graph-rest-1.0",
+    "https://learn.microsoft.com/en-us/graph/api/security-rulesroot-post-detectionrules?view=graph-rest-1.0",
+    "https://learn.microsoft.com/en-us/graph/api/security-detectionrule-update?view=graph-rest-1.0",
+    "https://learn.microsoft.com/en-us/defender-xdr/custom-detection-rules"
+  ]
+}

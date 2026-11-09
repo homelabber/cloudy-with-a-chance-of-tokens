@@ -1,0 +1,44 @@
+{
+  "SchemaVersion": 1,
+  "Queries": [
+    {"Id":"operations","File":"01-operations.kql","Title":"Discover cloud operations and identifier coverage","Tables":["CloudAppEvents"]},
+    {"Id":"app-posture","File":"02-app-posture.kql","Title":"Latest supported OAuth app metadata","Tables":["OAuthAppInfo"]},
+    {"Id":"protected-access","File":"03-protected-access.kql","Title":"Protected account or resource activity","Tables":["CloudAppEvents"],"AnyConfiguredLists":["ProtectedAccountObjectIds","ProtectedResourceIds"]},
+    {"Id":"app-timeline","File":"04-app-timeline.kql","Title":"Watched app cross-workload activity","Tables":["CloudAppEvents"],"RequiredLists":["WatchedAppIds"]},
+    {"Id":"alert-enrichment","File":"05-alert-enrichment.kql","Title":"Protected account alert evidence across products","Tables":["AlertInfo","AlertEvidence"],"RequiredLists":["ProtectedAccountObjectIds"]},
+    {"Id":"teams-endpoint","File":"06-teams-endpoint.kql","Title":"Endpoint tool execution after an impacted-user Teams alert","Tables":["AlertInfo","AlertEvidence","DeviceProcessEvents"],"RequiredLists":["NativeTeamsAlertTitles","RemoteToolFileNames"]},
+    {"Id":"remediation-review","File":"07-remediation-review.kql","Title":"Observed activity after recorded remediation times","Tables":["CloudAppEvents"],"RequiredLists":["RemediationRecords"]},
+    {"Id":"watched-protected-access","File":"08-watched-protected-access.kql","Title":"Watched app accessing explicitly protected resources","Tables":["CloudAppEvents"],"RequiredLists":["WatchedAppIds","ProtectedResourceIds","MonitoredActionTypes"]},
+    {"Id":"teams-alert-discovery","File":"09-teams-alert-discovery.kql","Title":"Discover Teams-related native alert titles and evidence roles","Tables":["AlertInfo","AlertEvidence"]}
+  ],
+  "Rules": [
+    {
+      "Id":"cav-teams-endpoint-v1",
+      "QueryId":"teams-endpoint",
+      "Title":"Cloud App Visibility: endpoint tool after reviewed Teams alert",
+      "Description":"Contextual correlation of an impacted account on a reviewed native Teams alert with a later endpoint tool execution by the same Entra user. Alert time is not contact time. This does not prove causality, remote-session success, malicious execution, or a Tier-0 pivot.",
+      "Severity":"medium",
+      "ReviewFlag":"TeamsAlertMappingsVerified",
+      "RequiredLists":["NativeTeamsAlertTitles","RemoteToolFileNames"],
+      "RequiredColumns":["Timestamp","ReportId","DeviceId","DeviceName","AccountObjectId"],
+      "SourceIds":["ms-2026-09-02","ms-2026-11-05"],
+      "NativeOverlap":"Native suspicious Teams and endpoint alerts already exist. This adds bounded same-user correlation, not a standalone tool or Teams detection.",
+      "RecommendedActions":"Review the source alert and impacted-user evidence. Validate process parentage, approved support activity, and actual contact time. Pivot to existing identity alerts for Tier-0 activity; do not infer a pivot from this alert alone.",
+      "HostMapping":true
+    },
+    {
+      "Id":"cav-watched-protected-access-v1",
+      "QueryId":"watched-protected-access",
+      "Title":"Cloud App Visibility: watched app accessed protected resource",
+      "Description":"An explicitly watched OAuth app generated a reviewed access operation on an explicitly protected resource. This is a tenant-specific policy signal inspired by reported mailbox collection, not a recreation of device-code or exfiltration detection. Audit activity alone does not prove successful exfiltration.",
+      "Severity":"medium",
+      "ReviewFlag":"ProtectedAccessMappingsVerified",
+      "RequiredLists":["WatchedAppIds","ProtectedResourceIds","MonitoredActionTypes"],
+      "RequiredColumns":["Timestamp","ReportId","AccountObjectId"],
+      "SourceIds":["ms-2026-09-22"],
+      "NativeOverlap":"Native device-code, Graph, inbox-rule and suspicious app access detections already exist. Use only for reviewed resource/app combinations not adequately covered by native policies.",
+      "RecommendedActions":"Confirm the operation outcome in source audit data, app identity, permission grant, protected resource classification and business approval. Review native alerts and other resources accessed before considering containment.",
+      "HostMapping":false
+    }
+  ]
+}

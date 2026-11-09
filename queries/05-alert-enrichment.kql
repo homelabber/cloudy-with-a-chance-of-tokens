@@ -1,0 +1,10 @@
+let ProtectedAccounts = dynamic(__ProtectedAccountObjectIds__);
+let Evidence = AlertEvidence
+| where Timestamp > ago(__LOOKBACK__)
+| where isnotempty(AccountObjectId) and AccountObjectId in~ (ProtectedAccounts)
+| summarize EvidenceRoles=make_set(EvidenceRole, 10), AccountUpns=make_set(AccountUpn, 10) by AlertId, AccountObjectId;
+AlertInfo
+| where Timestamp > ago(__LOOKBACK__)
+| join kind=inner Evidence on AlertId
+| project Timestamp, AlertId, Title, Severity, ServiceSource, DetectionSource, AccountObjectId, AccountUpns, EvidenceRoles, AttackTechniques
+| order by Timestamp desc
