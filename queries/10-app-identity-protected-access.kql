@@ -1,0 +1,13 @@
+// Non-user/unknown audit identity candidates, not proof of app-only authentication.
+// AccountType and AccountObjectId alone do not establish token grant type.
+let WatchedApps = dynamic(__WatchedAppIds__);
+let ProtectedResources = dynamic(__ProtectedResourceIds__);
+let ReviewedOperations = dynamic(__MonitoredActionTypes__);
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where isnotempty(OAuthAppId) and OAuthAppId in~ (WatchedApps)
+| where ObjectId in (ProtectedResources) and ActionType in~ (ReviewedOperations)
+| where AccountType !in~ ("Regular", "Admin") or isempty(AccountObjectId)
+| extend IdentityAssessment="Non-user or unresolved audit identity; validate application authentication separately"
+| project Timestamp, ReportId, OAuthAppId, Application, ActionType, AccountType, AccountObjectId, ObjectId, ObjectType, IPAddress, AuditSource, IdentityAssessment
+| order by Timestamp desc

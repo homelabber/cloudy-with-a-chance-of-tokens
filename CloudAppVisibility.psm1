@@ -68,8 +68,15 @@ function Read-CavContext {
     param([string]$ConfigPath)
     $config=ConvertFrom-CavJson (Get-Content -LiteralPath $ConfigPath -Raw -ErrorAction Stop)
     $example=ConvertFrom-CavJson (Get-Content -LiteralPath (Join-Path $script:PackageRoot 'config.example.json') -Raw)
+    $optional=@('EnableApplicationIdentityHunting','EnableGitHubHunting','GitHubApplicationNames','NativeGitHubAlertTitles')
     foreach ($property in $example.PSObject.Properties.Name) {
-        if ($config.PSObject.Properties.Name -notcontains $property) { throw "Missing configuration property: $property" }
+        if ($config.PSObject.Properties.Name -notcontains $property) {
+            if ($optional -contains $property) { $config | Add-Member -NotePropertyName $property -NotePropertyValue $example.$property }
+            else { throw "Missing configuration property: $property" }
+        }
+    }
+    foreach ($name in @('EnableApplicationIdentityHunting','EnableGitHubHunting')) {
+        if ($config.$name -isnot [bool]) { throw "$name must be a JSON boolean." }
     }
     foreach ($property in $config.PSObject.Properties.Name) {
         if ($example.PSObject.Properties.Name -notcontains $property) { throw "Unknown configuration property: $property" }
@@ -80,7 +87,7 @@ function Read-CavContext {
         if ($value -isnot [int] -or $value -lt $range[1] -or $value -gt $range[2]) { throw "Invalid integer setting: $($range[0])" }
     }
     $guidFields=@('ProtectedAccountObjectIds','WatchedAppIds','ApprovedAppIds')
-    $lists=@('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords')
+    $lists=@('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords','GitHubApplicationNames','NativeGitHubAlertTitles')
     foreach ($name in $lists) {
         if ($config.$name -isnot [array]) { throw "$name must be a JSON array." }
         if ($config.$name.Count -gt 500) { throw "$name exceeds the 500-entry limit." }
@@ -105,7 +112,8 @@ function Read-CavContext {
         if ($record.RemediatedAt -isnot [string] -or $record.RemediatedAt -notmatch '^\d{4}-\d{2}-\d{2}T.*Z$' -or -not [DateTimeOffset]::TryParse($record.RemediatedAt,[ref]$date) -or $date -gt [DateTimeOffset]::UtcNow) { throw 'RemediatedAt must be a past ISO-8601 UTC timestamp ending in Z.' }
     }
     $catalog=Get-Content -LiteralPath (Join-Path $script:PackageRoot 'catalog.json') -Raw | ConvertFrom-Json
-    return [pscustomobject]@{ Config=$config; Catalog=$catalog }
+    $evidence=ConvertFrom-CavJson (Get-Content -LiteralPath (Join-Path $script:PackageRoot 'evidence.json') -Raw -ErrorAction Stop)
+    return [pscustomobject]@{ Config=$config; Catalog=$catalog; Evidence=$evidence }
 }
 
 function Get-CavQuery {
@@ -116,7 +124,7 @@ function Get-CavQuery {
     if ($file -notmatch '^[0-9]{2}-[a-z-]+\.kql$') { throw 'Invalid catalog query filename.' }
     $query=Get-Content -LiteralPath (Join-Path (Join-Path $script:PackageRoot 'queries') $file) -Raw -ErrorAction Stop
     $tokens=@{}
-    foreach ($name in @('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords')) {
+    foreach ($name in @('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords','GitHubApplicationNames','NativeGitHubAlertTitles')) {
         $tokens[$name]=ConvertTo-Json -InputObject @($Context.Config.$name) -Depth 12 -Compress
     }
     $tokens['LOOKBACK']=if ($ForDetection) { '1h' } else { "$($Context.Config.LookbackDays)d" }
@@ -295,6 +303,7 @@ function Get-CavPlan {
 function Invoke-CavAssessment {
     param($Context, [Security.SecureString]$AccessToken, [switch]$IncludeRuleInventory)
     $tables=@('CloudAppEvents','OAuthAppInfo','AlertInfo','AlertEvidence','DeviceProcessEvents','IdentityLogonEvents')
+    if ($Context.Config.EnableApplicationIdentityHunting) { $tables+=@('EntraIdSpnSignInEvents','GraphAPIAuditEvents') }
     $health=@(foreach ($table in $tables) {
         try {
             $query="$table | where Timestamp > ago(30d) | summarize RowsInLookback=countif(Timestamp > ago($($Context.Config.LookbackDays)d)), LastSeen=max(Timestamp)"
@@ -310,6 +319,13 @@ function Invoke-CavAssessment {
         } catch { [pscustomobject]@{ Table=$table; Status='UnavailableOrQueryFailed'; LastSeen=$null; RowsInLookback=$null; Error=$_.Exception.Message } }
     })
     $checks=@(foreach ($entry in $Context.Catalog.Queries) {
+        if ($entry.PSObject.Properties.Name -contains 'EnableFlag') {
+            $blockers=@(Get-CavExportBlockers $Context $entry)
+            if ($blockers.Count -gt 0) {
+                [pscustomobject]@{ QueryId=$entry.Id; Status='NotConfigured'; ReturnedSample=$null; Error=($blockers -join ' ') }
+                continue
+            }
+        }
         try {
             $response=Invoke-CavHunting -Query ((Get-CavQuery $Context $entry.Id)+"`n| take 1") -AccessToken $AccessToken
             [pscustomobject]@{ QueryId=$entry.Id; Status='Compiled'; ReturnedSample=@($response.results).Count; Error=$null }
@@ -333,6 +349,9 @@ function Invoke-CavAssessment {
 
 function Get-CavExportBlockers {
     param($Context, $Entry)
+    if ($Entry.PSObject.Properties.Name -contains 'EnableFlag' -and -not $Context.Config.($Entry.EnableFlag)) {
+        "Optional hunting disabled: $($Entry.EnableFlag)"
+    }
     if ($Entry.PSObject.Properties.Name -contains 'RequiredLists') {
         foreach ($name in $Entry.RequiredLists) {
             if (@($Context.Config.$name).Count -eq 0) { "Empty required list: $name" }
@@ -341,6 +360,17 @@ function Get-CavExportBlockers {
     if ($Entry.PSObject.Properties.Name -contains 'AnyConfiguredLists') {
         $configured=@($Entry.AnyConfiguredLists | Where-Object { @($Context.Config.$_).Count -gt 0 })
         if ($configured.Count -eq 0) { 'Configure at least one of: '+($Entry.AnyConfiguredLists -join ', ') }
+    }
+}
+
+function Get-CavCoverage {
+    param($Context, $Entry)
+    $sources=@($Context.Evidence.Reports | Where-Object { $_.QueryIds -contains $Entry.Id } | Select-Object Id,Published,Modified,EvidenceType,BaselineClassification,Url)
+    return [pscustomobject]@{
+        RequiredTables=@($Entry.Tables); TelemetryKind=$Entry.TelemetryKind
+        VisibilityBoundary=$Entry.VisibilityBoundary; NativeOverlap=$Entry.NativeOverlap
+        RelatedProject=$Entry.RelatedProject; Evidence=$sources
+        Availability='See query status: success is not complete telemetry; failure does not identify a specific missing table. Assess probes tables separately.'
     }
 }
 
@@ -401,6 +431,15 @@ body{font:15px system-ui,sans-serif;background:#f4f6fa;color:#182238;max-width:1
     foreach ($view in $Views) {
         $null=$html.Append('<section><h2>').Append([Net.WebUtility]::HtmlEncode($view.Title)).Append('</h2><p><code>')
         $null=$html.Append([Net.WebUtility]::HtmlEncode($view.QueryId)).Append('</code> | ').Append($view.Status).Append(' | Returned rows: ').Append($view.RowCount).Append('</p>')
+        $coverage=$view.Coverage
+        $null=$html.Append('<p><b>Required telemetry:</b> ').Append([Net.WebUtility]::HtmlEncode(($coverage.RequiredTables -join ', '))).Append(' | ').Append([Net.WebUtility]::HtmlEncode($coverage.TelemetryKind)).Append('</p>')
+        foreach ($text in @($coverage.VisibilityBoundary,$coverage.Availability,('Native overlap: '+$coverage.NativeOverlap),('Related coverage: '+$coverage.RelatedProject))) {
+            $null=$html.Append('<p>').Append([Net.WebUtility]::HtmlEncode($text)).Append('</p>')
+        }
+        foreach ($source in $coverage.Evidence) {
+            $text=('Evidence: {0}; published {1}; modified {2}; {3}; {4}; {5}' -f $source.Id,$source.Published,$source.Modified,$source.EvidenceType,$source.BaselineClassification,$source.Url)
+            $null=$html.Append('<p>').Append([Net.WebUtility]::HtmlEncode($text)).Append('</p>')
+        }
         foreach ($message in @($view.Blockers)+@($view.Error)+@($view.LimitIndicators)) {
             if ($message) { $null=$html.Append('<p>').Append([Net.WebUtility]::HtmlEncode([string]$message)).Append('</p>') }
         }
@@ -443,7 +482,7 @@ function Export-CavResults {
         $view=[pscustomobject][ordered]@{
             QueryId=$entry.Id; Title=$entry.Title; Tables=@($entry.Tables); Status='NotConfigured'
             StartedAt=$null; CompletedAt=$null; Blockers=$blockers; Error=$null
-            QueryText=$query; Schema=@(); Results=@(); RowCount=0
+            QueryText=$query; Schema=@(); Results=@(); RowCount=0; Coverage=(Get-CavCoverage $Context $entry)
             Completeness='NotGuaranteed'; LimitIndicators=@()
         }
         if ($blockers.Count -eq 0) {
@@ -478,20 +517,22 @@ function Export-CavResults {
         $views+=$view
     }
     $manifest=[ordered]@{
-        SchemaVersion=1; Kind='DashboardResultsManifest'; RunId=$runId; TenantId=$Context.Config.TenantId
+        SchemaVersion=2; Kind='DashboardResultsManifest'; RunId=$runId; TenantId=$Context.Config.TenantId
+        EvidenceAsOf=$Context.Evidence.ResearchAsOf
         StartedAt=$started; CompletedAt=[DateTimeOffset]::UtcNow.ToString('o'); Mode='ReadOnlyResultsExport'
         Status=if (@($views | Where-Object { $_.Status -eq 'QueryFailed' }).Count -gt 0) { 'CompletedWithQueryFailures' } elseif (@($views | Where-Object { $_.Status -eq 'NotConfigured' }).Count -gt 0) { 'CompletedWithUnconfiguredViews' } else { 'Completed' }
         Context=@{
             LookbackDays=$Context.Config.LookbackDays; AppPostureLookbackDays=30
             TeamsContextLookbackDays=($Context.Config.LookbackDays+1); SequenceWindowMinutes=$Context.Config.SequenceWindowMinutes
             ConfiguredEntryCounts=@{}; Reviews=$Context.Config.Reviews
+            EnableApplicationIdentityHunting=$Context.Config.EnableApplicationIdentityHunting; EnableGitHubHunting=$Context.Config.EnableGitHubHunting
         }
         Completeness='Not guaranteed: API row/time/resource limits, sequential relative query windows and ingestion delays apply. No paging, retries or audit completeness guarantee.'
         CsvPolicy='All fields quoted; formula-like cells prefixed with apostrophe. JSON preserves unmodified returned values. Nested cells are compact JSON.'
         HtmlPreviewRowsPerView=200; Views=@(); Files=@()
     }
-    foreach ($name in @('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords')) { $manifest.Context.ConfiguredEntryCounts[$name]=@($Context.Config.$name).Count }
-    $manifest.Views=@($views | Select-Object QueryId,Title,Status,StartedAt,CompletedAt,RowCount,Blockers,Error,Completeness,LimitIndicators)
+    foreach ($name in @('NativeTeamsAlertTitles','RemoteToolFileNames','ApprovedSequenceDeviceIds','ProtectedAccountObjectIds','ProtectedResourceIds','WatchedAppIds','ApprovedAppIds','MonitoredActionTypes','RemediationRecords','GitHubApplicationNames','NativeGitHubAlertTitles')) { $manifest.Context.ConfiguredEntryCounts[$name]=@($Context.Config.$name).Count }
+    $manifest.Views=@($views | Select-Object QueryId,Title,Status,StartedAt,CompletedAt,RowCount,Blockers,Error,Completeness,LimitIndicators,Coverage)
     $htmlPath=Join-Path $directory "$runId-dashboard.html"; $manifestPath=Join-Path $directory "$runId-manifest.json"
     $manifest.Files=@($files)+@($htmlPath,$manifestPath)
     $null=Write-CavFile -Path $htmlPath -Text (ConvertTo-CavHtml -Manifest $manifest -Views $views)
@@ -543,6 +584,12 @@ function Invoke-CavCommand {
     }
     if ($Mode -eq 'Hunt') {
         if (-not $QueryId) { throw 'Hunt requires QueryId.' }
+        $entry=@($context.Catalog.Queries | Where-Object { $_.Id -ceq $QueryId })
+        if ($entry.Count -ne 1) { throw "Unknown or duplicate query ID: $QueryId" }
+        if ($entry[0].PSObject.Properties.Name -contains 'EnableFlag') {
+            $blockers=@(Get-CavExportBlockers $context $entry[0])
+            if ($blockers.Count -gt 0) { throw ($blockers -join ' ') }
+        }
         return Invoke-CavHunting -Query (Get-CavQuery $context $QueryId) -AccessToken $AccessToken
     }
     if (-not $OutputDirectory -or -not (Test-Path -LiteralPath $OutputDirectory -PathType Container)) { throw 'Deployment and rollback require an existing OutputDirectory for recovery records.' }

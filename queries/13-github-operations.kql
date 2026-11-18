@@ -1,0 +1,7 @@
+// Exact observed connector application names; no invented GitHub operation mappings.
+let GitHubApplications = dynamic(__GitHubApplicationNames__);
+CloudAppEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where Application in~ (GitHubApplications)
+| summarize Events=count(), LastSeen=max(Timestamp), WithAuditAccountId=countif(isnotempty(AccountId)), WithAccountObjectId=countif(isnotempty(AccountObjectId)) by Application, ActionType, ActivityType, AccountType, AuditSource
+| order by Events desc

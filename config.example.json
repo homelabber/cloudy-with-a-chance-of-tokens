@@ -5,7 +5,13 @@
   "StaleAfterHours": 24,
   "SequenceWindowMinutes": 120,
   "NativeTeamsAlertTitles": [],
-  "RemoteToolFileNames": ["quickassist.exe", "msiexec.exe", "node.exe", "anydesk.exe", "teamviewer.exe"],
+  "RemoteToolFileNames": [
+    "quickassist.exe",
+    "msiexec.exe",
+    "node.exe",
+    "anydesk.exe",
+    "teamviewer.exe"
+  ],
   "ApprovedSequenceDeviceIds": [],
   "ProtectedAccountObjectIds": [],
   "ProtectedResourceIds": [],
@@ -17,5 +23,9 @@
     "NativeCoverageReviewed": false,
     "TeamsAlertMappingsVerified": false,
     "ProtectedAccessMappingsVerified": false
-  }
+  },
+  "EnableApplicationIdentityHunting": false,
+  "EnableGitHubHunting": false,
+  "GitHubApplicationNames": [],
+  "NativeGitHubAlertTitles": []
 }

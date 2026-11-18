@@ -1,0 +1,8 @@
+// Authentication timeline, including failures; success does not prove resource access.
+let WatchedApps = dynamic(__WatchedAppIds__);
+EntraIdSpnSignInEvents
+| where Timestamp > ago(__LOOKBACK__)
+| where ApplicationId in~ (WatchedApps)
+| extend AuthenticationOutcome=iff(ErrorCode == 0, "Success", "Failure")
+| project Timestamp, ReportId, ApplicationId, Application, ServicePrincipalId, ServicePrincipalName, IsManagedIdentity, ResourceId, ResourceDisplayName, ResourceTenantId, IPAddress, ErrorCode, AuthenticationOutcome, CorrelationId
+| order by Timestamp desc

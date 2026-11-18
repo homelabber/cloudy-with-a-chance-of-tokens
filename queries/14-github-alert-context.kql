@@ -1,0 +1,11 @@
+// Enrich existing reviewed native alerts, not a new phishing detection.
+// GitHub identities need not map to an Entra account; retain alerts without mappings.
+let ReviewedTitles = dynamic(__NativeGitHubAlertTitles__);
+let Evidence = AlertEvidence
+| where Timestamp > ago(__LOOKBACK__)
+| summarize EvidenceRoles=make_set(EvidenceRole, 10), ImpactedAccountObjectIds=make_set_if(AccountObjectId, EvidenceRole =~ "Impacted" and isnotempty(AccountObjectId), 100) by AlertId;
+AlertInfo
+| where Timestamp > ago(__LOOKBACK__) and Title in~ (ReviewedTitles)
+| join kind=leftouter Evidence on AlertId
+| project Timestamp, AlertId, Title, Severity, ServiceSource, DetectionSource, EvidenceRoles, ImpactedAccountObjectIds, AttackTechniques
+| order by Timestamp desc

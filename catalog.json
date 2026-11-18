@@ -1,44 +1,275 @@
 {
   "SchemaVersion": 1,
   "Queries": [
-    {"Id":"operations","File":"01-operations.kql","Title":"Discover cloud operations and identifier coverage","Tables":["CloudAppEvents"]},
-    {"Id":"app-posture","File":"02-app-posture.kql","Title":"Latest supported OAuth app metadata","Tables":["OAuthAppInfo"]},
-    {"Id":"protected-access","File":"03-protected-access.kql","Title":"Protected account or resource activity","Tables":["CloudAppEvents"],"AnyConfiguredLists":["ProtectedAccountObjectIds","ProtectedResourceIds"]},
-    {"Id":"app-timeline","File":"04-app-timeline.kql","Title":"Watched app cross-workload activity","Tables":["CloudAppEvents"],"RequiredLists":["WatchedAppIds"]},
-    {"Id":"alert-enrichment","File":"05-alert-enrichment.kql","Title":"Protected account alert evidence across products","Tables":["AlertInfo","AlertEvidence"],"RequiredLists":["ProtectedAccountObjectIds"]},
-    {"Id":"teams-endpoint","File":"06-teams-endpoint.kql","Title":"Endpoint tool execution after an impacted-user Teams alert","Tables":["AlertInfo","AlertEvidence","DeviceProcessEvents"],"RequiredLists":["NativeTeamsAlertTitles","RemoteToolFileNames"]},
-    {"Id":"remediation-review","File":"07-remediation-review.kql","Title":"Observed activity after recorded remediation times","Tables":["CloudAppEvents"],"RequiredLists":["RemediationRecords"]},
-    {"Id":"watched-protected-access","File":"08-watched-protected-access.kql","Title":"Watched app accessing explicitly protected resources","Tables":["CloudAppEvents"],"RequiredLists":["WatchedAppIds","ProtectedResourceIds","MonitoredActionTypes"]},
-    {"Id":"teams-alert-discovery","File":"09-teams-alert-discovery.kql","Title":"Discover Teams-related native alert titles and evidence roles","Tables":["AlertInfo","AlertEvidence"]}
+    {
+      "Id": "operations",
+      "File": "01-operations.kql",
+      "Title": "Discover cloud operations and identifier coverage",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "app-posture",
+      "File": "02-app-posture.kql",
+      "Title": "Latest supported OAuth app metadata",
+      "Tables": [
+        "OAuthAppInfo"
+      ],
+      "TelemetryKind": "ApplicationInventory",
+      "VisibilityBoundary": "Supported connected-source evidence only; absence of rows is not proof of absence. OAuthAppInfo is inventory, not authentication or a request log.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "protected-access",
+      "File": "03-protected-access.kql",
+      "Title": "Protected account or resource activity",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "AnyConfiguredLists": [
+        "ProtectedAccountObjectIds",
+        "ProtectedResourceIds"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "app-timeline",
+      "File": "04-app-timeline.kql",
+      "Title": "Watched app cross-workload activity",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "RequiredLists": [
+        "WatchedAppIds"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "alert-enrichment",
+      "File": "05-alert-enrichment.kql",
+      "Title": "Protected account alert evidence across products",
+      "Tables": [
+        "AlertInfo",
+        "AlertEvidence"
+      ],
+      "RequiredLists": [
+        "ProtectedAccountObjectIds"
+      ],
+      "TelemetryKind": "CrossProductEvidence",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "teams-endpoint",
+      "File": "06-teams-endpoint.kql",
+      "Title": "Endpoint tool execution after an impacted-user Teams alert",
+      "Tables": [
+        "AlertInfo",
+        "AlertEvidence",
+        "DeviceProcessEvents"
+      ],
+      "RequiredLists": [
+        "NativeTeamsAlertTitles",
+        "RemoteToolFileNames"
+      ],
+      "TelemetryKind": "CrossProductEvidence",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "remediation-review",
+      "File": "07-remediation-review.kql",
+      "Title": "Observed activity after recorded remediation times",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "RequiredLists": [
+        "RemediationRecords"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "watched-protected-access",
+      "File": "08-watched-protected-access.kql",
+      "Title": "Watched app accessing explicitly protected resources",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "RequiredLists": [
+        "WatchedAppIds",
+        "ProtectedResourceIds",
+        "MonitoredActionTypes"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "teams-alert-discovery",
+      "File": "09-teams-alert-discovery.kql",
+      "Title": "Discover Teams-related native alert titles and evidence roles",
+      "Tables": [
+        "AlertInfo",
+        "AlertEvidence"
+      ],
+      "TelemetryKind": "CrossProductEvidence",
+      "VisibilityBoundary": "Only collected source events or alerts; not a complete audit, authentication or Graph request trail.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "app-identity-protected-access",
+      "File": "10-app-identity-protected-access.kql",
+      "Title": "Non-user or unresolved app activity on protected resources",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "EnableFlag": "EnableApplicationIdentityHunting",
+      "RequiredLists": [
+        "WatchedAppIds",
+        "ProtectedResourceIds",
+        "MonitoredActionTypes"
+      ],
+      "TelemetryKind": "WorkloadAudit",
+      "VisibilityBoundary": "Audit identity candidates only: not proof of app-only token use. Approved apps intentionally retained; audit activity does not prove successful access or exfiltration.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "service-principal-signins",
+      "File": "11-service-principal-signins.kql",
+      "Title": "Watched application authentication timeline",
+      "Tables": [
+        "EntraIdSpnSignInEvents"
+      ],
+      "EnableFlag": "EnableApplicationIdentityHunting",
+      "RequiredLists": [
+        "WatchedAppIds"
+      ],
+      "TelemetryKind": "ApplicationAuthentication",
+      "VisibilityBoundary": "Authentication success/failure, not resource access. Managed identities can appear here although OAuthAppInfo excludes them.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "app-graph-timeline",
+      "File": "12-app-graph-timeline.kql",
+      "Title": "Watched application authentication and Graph evidence",
+      "Tables": [
+        "EntraIdSpnSignInEvents",
+        "GraphAPIAuditEvents"
+      ],
+      "EnableFlag": "EnableApplicationIdentityHunting",
+      "RequiredLists": [
+        "WatchedAppIds"
+      ],
+      "TelemetryKind": "AuthenticationAndGraphRequests",
+      "VisibilityBoundary": "Parallel evidence for a watched application, not a causal or token/session join. Graph may be delegated. Missing either table fails the view rather than hiding missing evidence. Request URIs and token identifiers are omitted.",
+      "NativeOverlap": "Enrich native OAuth/application anomaly and compromised-application detections; do not recreate generic native rules.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "github-operations",
+      "File": "13-github-operations.kql",
+      "Title": "Discover connected GitHub operation coverage",
+      "Tables": [
+        "CloudAppEvents"
+      ],
+      "EnableFlag": "EnableGitHubHunting",
+      "RequiredLists": [
+        "GitHubApplicationNames"
+      ],
+      "TelemetryKind": "ConnectedSaaSAudit",
+      "VisibilityBoundary": "Requires GitHub Enterprise Cloud connector and exact observed Application values. Operations are discovered, not assumed. Audit identifiers are not necessarily Entra or GitHub OAuth client identifiers.",
+      "NativeOverlap": "Enrich reviewed native GitHub Copilot CLI device-code phishing email/Teams alerts; availability is tenant-dependent. No duplicate device-code detector.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    },
+    {
+      "Id": "github-alert-context",
+      "File": "14-github-alert-context.kql",
+      "Title": "Reviewed native GitHub alert evidence",
+      "Tables": [
+        "AlertInfo",
+        "AlertEvidence"
+      ],
+      "EnableFlag": "EnableGitHubHunting",
+      "RequiredLists": [
+        "NativeGitHubAlertTitles"
+      ],
+      "TelemetryKind": "NativeAlertEvidence",
+      "VisibilityBoundary": "Existing native alerts only; no reconstruction of coding-agent sessions, memory or command execution. Unmapped alerts retained. Lab consequences are not observed campaign evidence.",
+      "NativeOverlap": "Enrich reviewed native GitHub Copilot CLI device-code phishing email/Teams alerts; availability is tenant-dependent. No duplicate device-code detector.",
+      "RelatedProject": "MDO-Anomalies owns email/phishing/user-consent/mailbox chains; mdi-freshness owns AD/Tier-0 sequences; sentinelheartsnutanix owns Prism telemetry."
+    }
   ],
   "Rules": [
     {
-      "Id":"cav-teams-endpoint-v1",
-      "QueryId":"teams-endpoint",
-      "Title":"Cloud App Visibility: endpoint tool after reviewed Teams alert",
-      "Description":"Contextual correlation of an impacted account on a reviewed native Teams alert with a later endpoint tool execution by the same Entra user. Alert time is not contact time. This does not prove causality, remote-session success, malicious execution, or a Tier-0 pivot.",
-      "Severity":"medium",
-      "ReviewFlag":"TeamsAlertMappingsVerified",
-      "RequiredLists":["NativeTeamsAlertTitles","RemoteToolFileNames"],
-      "RequiredColumns":["Timestamp","ReportId","DeviceId","DeviceName","AccountObjectId"],
-      "SourceIds":["ms-2026-09-02","ms-2026-11-05"],
-      "NativeOverlap":"Native suspicious Teams and endpoint alerts already exist. This adds bounded same-user correlation, not a standalone tool or Teams detection.",
-      "RecommendedActions":"Review the source alert and impacted-user evidence. Validate process parentage, approved support activity, and actual contact time. Pivot to existing identity alerts for Tier-0 activity; do not infer a pivot from this alert alone.",
-      "HostMapping":true
+      "Id": "cav-teams-endpoint-v1",
+      "QueryId": "teams-endpoint",
+      "Title": "Cloud App Visibility: endpoint tool after reviewed Teams alert",
+      "Description": "Contextual correlation of an impacted account on a reviewed native Teams alert with a later endpoint tool execution by the same Entra user. Alert time is not contact time. This does not prove causality, remote-session success, malicious execution, or a Tier-0 pivot.",
+      "Severity": "medium",
+      "ReviewFlag": "TeamsAlertMappingsVerified",
+      "RequiredLists": [
+        "NativeTeamsAlertTitles",
+        "RemoteToolFileNames"
+      ],
+      "RequiredColumns": [
+        "Timestamp",
+        "ReportId",
+        "DeviceId",
+        "DeviceName",
+        "AccountObjectId"
+      ],
+      "SourceIds": [
+        "ms-2026-09-02",
+        "ms-2026-11-05"
+      ],
+      "NativeOverlap": "Native suspicious Teams and endpoint alerts already exist. This adds bounded same-user correlation, not a standalone tool or Teams detection.",
+      "RecommendedActions": "Review the source alert and impacted-user evidence. Validate process parentage, approved support activity, and actual contact time. Pivot to existing identity alerts for Tier-0 activity; do not infer a pivot from this alert alone.",
+      "HostMapping": true
     },
     {
-      "Id":"cav-watched-protected-access-v1",
-      "QueryId":"watched-protected-access",
-      "Title":"Cloud App Visibility: watched app accessed protected resource",
-      "Description":"An explicitly watched OAuth app generated a reviewed access operation on an explicitly protected resource. This is a tenant-specific policy signal inspired by reported mailbox collection, not a recreation of device-code or exfiltration detection. Audit activity alone does not prove successful exfiltration.",
-      "Severity":"medium",
-      "ReviewFlag":"ProtectedAccessMappingsVerified",
-      "RequiredLists":["WatchedAppIds","ProtectedResourceIds","MonitoredActionTypes"],
-      "RequiredColumns":["Timestamp","ReportId","AccountObjectId"],
-      "SourceIds":["ms-2026-09-22"],
-      "NativeOverlap":"Native device-code, Graph, inbox-rule and suspicious app access detections already exist. Use only for reviewed resource/app combinations not adequately covered by native policies.",
-      "RecommendedActions":"Confirm the operation outcome in source audit data, app identity, permission grant, protected resource classification and business approval. Review native alerts and other resources accessed before considering containment.",
-      "HostMapping":false
+      "Id": "cav-watched-protected-access-v1",
+      "QueryId": "watched-protected-access",
+      "Title": "Cloud App Visibility: watched app accessed protected resource",
+      "Description": "An explicitly watched OAuth app generated a reviewed access operation on an explicitly protected resource. This is a tenant-specific policy signal inspired by reported mailbox collection, not a recreation of device-code or exfiltration detection. Audit activity alone does not prove successful exfiltration.",
+      "Severity": "medium",
+      "ReviewFlag": "ProtectedAccessMappingsVerified",
+      "RequiredLists": [
+        "WatchedAppIds",
+        "ProtectedResourceIds",
+        "MonitoredActionTypes"
+      ],
+      "RequiredColumns": [
+        "Timestamp",
+        "ReportId",
+        "AccountObjectId"
+      ],
+      "SourceIds": [
+        "ms-2026-09-22"
+      ],
+      "NativeOverlap": "Native device-code, Graph, inbox-rule and suspicious app access detections already exist. Use only for reviewed resource/app combinations not adequately covered by native policies.",
+      "RecommendedActions": "Confirm the operation outcome in source audit data, app identity, permission grant, protected resource classification and business approval. Review native alerts and other resources accessed before considering containment.",
+      "HostMapping": false
     }
   ]
 }

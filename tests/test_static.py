@@ -139,7 +139,7 @@ class PackageContracts(unittest.TestCase):
     def test_source_dates_are_in_window_and_match_urls(self):
         start = date.fromisoformat(EVIDENCE["PublicationWindow"]["From"])
         end = date.fromisoformat(EVIDENCE["PublicationWindow"]["Through"])
-        self.assertEqual(5, len(EVIDENCE["Reports"]))
+        self.assertEqual(7, len(EVIDENCE["Reports"]))
         for source in EVIDENCE["Reports"]:
             published = date.fromisoformat(source["Published"])
             self.assertLessEqual(start, published)
@@ -208,6 +208,53 @@ class PackageContracts(unittest.TestCase):
         self.assertIn('$text.Replace', csv)
         self.assertIn('ConvertTo-CavCsvField $column.name', csv)
         self.assertIn('$row.PSObject.Properties', csv)
+
+    def test_application_identity_queries_preserve_boundaries(self):
+        query = QUERIES['app-identity-protected-access']
+        self.assertIn('AccountType !in~ ("Regular", "Admin") or isempty(AccountObjectId)', query)
+        self.assertIn('OAuthAppId in~ (WatchedApps)', query)
+        self.assertIn('ObjectId in (ProtectedResources)', query)
+        self.assertIn('ActionType in~ (ReviewedOperations)', query)
+        self.assertNotIn('ApprovedApps', query)
+        timeline = QUERIES['app-graph-timeline']
+        self.assertIn('EntraIdSpnSignInEvents', timeline)
+        self.assertIn('GraphAPIAuditEvents', timeline)
+        self.assertIn('union Signins, Requests', timeline)
+        self.assertNotIn('join kind=', timeline)
+        self.assertNotIn('isfuzzy=', timeline)
+        projection = '\n'.join(line for line in timeline.splitlines() if line.startswith('| project'))
+        for sensitive in ('RequestUri', 'UniqueTokenIdentifier', 'Scopes'):
+            self.assertNotIn(sensitive, projection)
+        self.assertIn('ErrorCode == 0', QUERIES['service-principal-signins'])
+
+    def test_optional_coverage_and_source_classification(self):
+        self.assertFalse(CONFIG['EnableApplicationIdentityHunting'])
+        self.assertFalse(CONFIG['EnableGitHubHunting'])
+        optional = [q for q in CATALOG['Queries'] if 'EnableFlag' in q]
+        self.assertEqual(5, len(optional))
+        self.assertEqual(2, len(CATALOG['Rules']))
+        for query in CATALOG['Queries']:
+            for key in ('TelemetryKind', 'VisibilityBoundary', 'NativeOverlap', 'RelatedProject'):
+                self.assertTrue(query[key])
+            if 'EnableFlag' in query:
+                self.assertIs(CONFIG[query['EnableFlag']], False)
+        reports = {r['Id']: r for r in EVIDENCE['Reports']}
+        self.assertEqual('LabDemonstration', reports['ms-2026-11-17-github']['EvidenceType'])
+        self.assertIn('MissedBaseline', reports['ms-2026-11-05-secrets']['BaselineClassification'])
+        self.assertEqual('2026-11-10', reports['ms-2026-11-05-secrets']['Modified'])
+        self.assertIn("SchemaVersion=2; Kind='DashboardResultsManifest'", MODULE)
+        self.assertIn('Coverage=(Get-CavCoverage $Context $entry)', MODULE)
+        self.assertIn('Required telemetry:', MODULE)
+
+    def test_github_uses_native_alerts_not_entra_app_ids(self):
+        query = QUERIES['github-operations']
+        self.assertIn('Application in~ (GitHubApplications)', query)
+        self.assertNotIn('OAuthAppId', query)
+        alerts = QUERIES['github-alert-context']
+        self.assertIn('Title in~ (ReviewedTitles)', alerts)
+        self.assertIn('join kind=leftouter Evidence', alerts)
+        self.assertIn('EvidenceRole =~ "Impacted"', alerts)
+        self.assertNotIn('DeviceProcessEvents', alerts)
 
     def test_module_does_not_weaken_device_protections(self):
         for prohibited in ("Unblock-File", "Set-ExecutionPolicy", "-ExecutionPolicy Bypass"):

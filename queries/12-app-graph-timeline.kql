@@ -1,0 +1,11 @@
+// Parallel evidence timeline, not a causal/token/session join. Graph may be delegated.
+// Deliberately omit RequestUri, scopes and token IDs from portable exports.
+let WatchedApps = dynamic(__WatchedAppIds__);
+let Signins = EntraIdSpnSignInEvents
+| where Timestamp > ago(__LOOKBACK__) and ApplicationId in~ (WatchedApps)
+| project Timestamp, ReportId, EvidenceType="ServicePrincipalAuthentication", ApplicationId, ServicePrincipalId, IPAddress, Resource=ResourceDisplayName, Operation="SignIn", Outcome=tostring(ErrorCode), AccountObjectId="", CorrelationAssessment="Same watched application; no causal linkage established";
+let Requests = GraphAPIAuditEvents
+| where Timestamp > ago(__LOOKBACK__) and ApplicationId in~ (WatchedApps)
+| project Timestamp, ReportId, EvidenceType="GraphRequest", ApplicationId, ServicePrincipalId, IPAddress=IpAddress, Resource=TargetWorkload, Operation=RequestMethod, Outcome=ResponseStatusCode, AccountObjectId, CorrelationAssessment="Graph request may be delegated or app-only; inspect source evidence";
+union Signins, Requests
+| order by Timestamp desc

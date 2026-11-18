@@ -4,7 +4,7 @@
 
 A Defender XDR-first investigation companion for Microsoft Defender for Cloud Apps and app governance. Follow the evidence, not just the alert count.
 
-The Cloud App Visibility PowerShell package provides nine configured hunting views, read-only telemetry assessment, portable CSV/JSON/HTML reports, source-backed investigation context, and two **optional, disabled-by-default** custom detections. It complements existing identity visibility and native Microsoft detections; it does not try to out-alert your alert queue.
+The Cloud App Visibility PowerShell package provides fourteen configured hunting views (five new views are opt-in), read-only telemetry assessment, portable CSV/JSON/HTML reports, source-backed investigation context, and two **optional, disabled-by-default** custom detections. It complements existing identity visibility and native Microsoft detections; it does not try to out-alert your alert queue.
 
 No Sentinel dependency, agent, background service, credential store, or automatic containment. This is an independent package, not a Microsoft product or an installable Defender dashboard.
 
@@ -25,8 +25,8 @@ No Sentinel dependency, agent, background service, credential store, or automati
 | `Invoke-CloudAppVisibility.ps1` | Entry point; defaults to an offline plan with no network or file writes. |
 | `CloudAppVisibility.psm1` | Configuration validation, safe rendering, read-only Graph assessment and results export, disabled rule deployment, recovery receipts and guarded rollback. |
 | `config.example.json` | Empty tenant-sensitive lists; context-dependent views need configuration, while discovery views can return data. |
-| `catalog.json` | Nine hunting views and two opt-in detection definitions. |
-| `evidence.json` | Five Microsoft reports, attribution boundaries, observed behavior, native overlap, and technical references. Research window: March 5–November 5, 2026. |
+| `catalog.json` | Fourteen hunting views and two unchanged opt-in detection definitions. Includes telemetry boundaries and coverage ownership. |
+| `evidence.json` | Seven Microsoft reports, attribution boundaries, observed activity versus lab demonstrations, native overlap, and technical references. Research window: March 5–November 17, 2026. |
 | `tests` | Dependency-free static checks and mocked PowerShell behavioral tests. |
 
 ### Recent threat activity informing the views
@@ -41,6 +41,17 @@ These are primary-source observations, **not proof of a missing Microsoft detect
 | May 4: code-of-conduct phishing | April 14–16 AiTM token capture campaign. Actor unnamed. | Protected-account alert enrichment and follow-on hunting. No invented downstream mailbox behavior or duplicate impossible-travel rule. |
 | November 5: Q3 email threats | August device-code salary lures; Teams callers increasingly used ordinary names. Actors unnamed for these examples. | Avoid helpdesk-name-only detection. Call attempts are not successful contacts; the described token-transfer mechanism is not a verified compromise count. |
 
+### November 17 visibility update: applications have identities, too
+
+Five new **hunting-only, opt-in** views add application-identity and connected GitHub context. The two existing detections and their deployment definitions are unchanged. No connectors are installed, no detections are enabled, and no automated response is introduced.
+
+| Evidence addition | Classification | Why it matters |
+|---|---|---|
+| [Exposed application secrets and agentic tooling, November 5](https://www.microsoft.com/en-us/security/blog/2026/11/05/threat-actors-use-agentic-ai-tooling-to-find-and-abuse-exposed-secrets/) | **Observed activity; missed baseline.** Modified November 10, but the substantive change is unverified. The application-credential chain is not attributed to a named actor here. | Stolen application credentials, service-principal authentication and Graph/resource activity need different evidence from a user-consent chain. A November 10 modification is not a November 10 discovery. |
+| [Device-code authentication risks for AI coding agents, November 17](https://www.microsoft.com/en-us/security/blog/2026/11/17/the-risks-of-device-code-authentication-for-ai-coding-agents/) | **Controlled lab demonstration**, not an observed campaign. Microsoft says the demonstrated outcomes were not observed in the wild. | Connected GitHub activity and reviewed native alerts can support investigation. Repository, session, memory and conditional remote-control consequences must not be inferred from a single audit row. |
+
+This project owns application/SaaS investigation context. [MDO-Anomalies](https://github.com/homelabber/MDO-Anomalies) owns email/phishing, user-consent and mailbox sequences; [mdi-freshness](https://github.com/homelabber/mdi-freshness) owns AD/Tier-0 sequences; [sentinelheartsnutanix](https://github.com/homelabber/sentinelheartsnutanix) owns Prism telemetry. Existing Microsoft detections remain the starting signal, not competition for another alert.
+
 ## Prerequisites and trust
 
 - Windows PowerShell 5.1 or PowerShell 7 on Windows/NTFS; no third-party module is required by the package.
@@ -48,6 +59,8 @@ These are primary-source observations, **not proof of a missing Microsoft detect
 - Use your organization's trusted code-signing process for the `.ps1` and `.psm1` files before running them if device policy requires signatures. Do not bypass device protections. Signatures on the module and launcher are both relevant.
 - Online modes accept a short-lived **Microsoft Graph** access token as a `SecureString`, acquired through your approved authentication process. The package neither authenticates interactively nor persists tokens. Local JWT checks only guard tenant/audience routing and expiry; Graph performs actual token authentication. Opaque/non-JWT tokens are intentionally unsupported.
 - Only the global Microsoft Graph endpoint is supported. Sovereign clouds are not silently redirected.
+- Optional application authentication/Graph views require tenant availability and access to `EntraIdSpnSignInEvents` and `GraphAPIAuditEvents`. Verify licensing, ingestion, retention and current tenant schemas. `CloudAppEvents` is not a replacement for either table. A combined view fails if either required source is unavailable rather than silently returning a partial timeline.
+- Optional GitHub operation discovery requires the supported GitHub Enterprise Cloud connector, appropriate licensing/permissions, and exact observed `CloudAppEvents.Application` values. Native-alert context separately requires ingested `AlertInfo`/`AlertEvidence` and reviewed alert titles; it does not prove connector health. GitHub OAuth client IDs are not Entra app IDs and are not assumed to appear in `OAuthAppInfo`.
 
 Permissions (delegated or application, with required admin consent/RBAC):
 
@@ -83,6 +96,25 @@ Copy the example configuration through your normal editor/file workflow to a loc
 - **`RemediationRecords`:** objects such as `{ "OAuthAppId": "<actual GUID>", "RemediatedAt": "2026-11-01T12:00:00Z" }`. Use a real past UTC timestamp. The latest recorded cutoff per app is used; this is manual evidence, not automated proof remediation succeeded.
 - `LookbackDays`: 1–14 (default 7); `SequenceWindowMinutes`: 1–240 (default 120); `StaleAfterHours`: 1–720 (default 24). Lists are limited to 500 entries.
 - Set the three `Reviews` booleans only after the corresponding human reviews. They are acknowledgements, not automatically generated coverage certificates.
+
+### Enable optional hunting without changing detection policy
+
+Existing schema-version-1 tenant files remain supported: omitted new fields default to `false`/empty lists. New fields are validated as JSON booleans or string arrays; unknown fields are still rejected.
+
+- **`EnableApplicationIdentityHunting`** (default `false`): enables the three new application-identity views and adds separate authentication/Graph table probes to `Assess`. Set `WatchedAppIds`; the protected-resource candidate view also needs `ProtectedResourceIds` and `MonitoredActionTypes`.
+- **`EnableGitHubHunting`** (default `false`): enables the two GitHub views. Set `GitHubApplicationNames` to exact observed connector `Application` names for operation discovery and `NativeGitHubAlertTitles` to exact reviewed native titles for alert enrichment. Each view requires its own list; the package does not guess names or action mappings.
+
+Both flags gate `Assess`, `Hunt` and `ExportResults` for the new views. Offline `Export` still renders every query for manual review, including disabled optional views. Legacy views keep their existing behavior. Default `Assess` still probes its original six tables and compiles the original nine views; it reports the five optional views as `NotConfigured`. Enabling application hunting adds two table probes, even when watched-app lists still need configuration.
+
+The new protected-resource view includes **non-user or unresolved audit identities**, not a proven app-only token classification. Service/system/unknown types or missing account IDs need source-level validation. It deliberately retains watched applications also listed as approved, so approval does not hide investigation evidence. The existing user-mapped rule keeps its approved-app exclusion and `Regular`/`Admin` restriction.
+
+```powershell
+# After updating the local tenant configuration and using approved authentication:
+.\Invoke-CloudAppVisibility.ps1 -Mode Assess -ConfigPath $cfg -AccessToken $token
+.\Invoke-CloudAppVisibility.ps1 -Mode Hunt -QueryId service-principal-signins -ConfigPath $cfg -AccessToken $token
+.\Invoke-CloudAppVisibility.ps1 -Mode ExportResults -QueryId app-graph-timeline `
+    -ConfigPath $cfg -AccessToken $token -OutputDirectory 'C:\Security\exports'
+```
 
 ## Assess and discover
 
@@ -126,6 +158,11 @@ Files use a unique run prefix and are never overwritten. Save each rendered `.kq
 | `remediation-review` | Event-time activity later than the latest manually recorded remediation cutoff. |
 | `watched-protected-access` | Reviewed app + resource + operation intersection with usable impacted-account IDs. |
 | `teams-alert-discovery` | Candidate Teams alert titles and evidence roles for manual review; title keyword matching is discovery only. |
+| `app-identity-protected-access` | Opt-in non-user/unresolved audit identity candidates for watched app + reviewed operation + protected resource; not proof of app-only authentication. |
+| `service-principal-signins` | Opt-in watched-application authentication successes/failures, resource, service principal and IP context. Authentication is not resource access. |
+| `app-graph-timeline` | Opt-in parallel application authentication and Graph request timeline; no causal, token or session join. Graph activity may be delegated. Request URIs, scopes and token IDs are deliberately omitted. |
+| `github-operations` | Opt-in operation and identifier-coverage discovery for exact configured GitHub connector application names; no assumed token/repository event names. |
+| `github-alert-context` | Opt-in reviewed native alert context and impacted-account evidence; retains alerts with no Entra mapping. Does not reconstruct coding-agent sessions, memory or commands. |
 
 The views avoid message subjects, email bodies, process command lines and full raw audit payloads by default. Identifiers and access metadata are still sensitive. Secure exported files and any PowerShell transcripts under your organization's retention policy. API row/time/resource limits apply; a hunting response is not a completeness guarantee. A zero-row view with empty configuration is expected.
 
@@ -139,7 +176,7 @@ After trusted signing, tenant configuration and approved token acquisition, choo
 # Preview the action: no token, network requests or file writes required.
 .\Invoke-CloudAppVisibility.ps1 -Mode ExportResults -OutputDirectory 'C:\Security\exports' -WhatIf
 
-# All nine views; explicitly confirm collection and sensitive local output.
+# All fourteen views; disabled/unconfigured optional views are recorded but not queried.
 $report = .\Invoke-CloudAppVisibility.ps1 -Mode ExportResults `
     -ConfigPath $cfg -AccessToken $token -OutputDirectory 'C:\Security\exports'
 $report | Select-Object Status, DashboardPath, ManifestPath
@@ -149,7 +186,7 @@ $report | Select-Object Status, DashboardPath, ManifestPath
     -ConfigPath $cfg -AccessToken $token -OutputDirectory 'C:\Security\exports'
 ```
 
-Each run has a unique timestamp/GUID prefix and never overwrites another file. An all-view run produces 29 files:
+Each run has a unique timestamp/GUID prefix and never overwrites another file. An all-view run produces 44 files, including status-only records for disabled optional views:
 
 | Artifact | Contents |
 |---|---|
@@ -168,7 +205,9 @@ Each run has a unique timestamp/GUID prefix and never overwrites another file. A
 
 Successful empty views get CSV headers when a schema is available. Unconfigured/failed views without schema have empty CSV files; consult JSON and the manifest instead of interpreting an empty file as a successful query. If the API reports an error alongside rows, those rows remain explicitly flagged as potentially partial.
 
-The manifest records the configured activity window, the 30-day app-posture window, and the longer Teams alert context window. Views run sequentially using their existing relative query windows; collection is **not an atomic snapshot**. API row/time/resource limits and ingestion delays still apply. Warnings, continuation indicators and returned row counts at or above 100,000 are flagged, but absence of an indicator does not prove completeness. No pagination, automatic retry, time slicing or scheduled collection is introduced.
+The results manifest is now **schema version 2**; consumers should check `SchemaVersion` before parsing. Per-view JSON, manifest entries and HTML include required tables, telemetry kind, visibility boundaries, native overlap, related-project ownership, and linked evidence classified by publication/modification date and observed-versus-lab status. `EvidenceAsOf` identifies the register date. Query success means only that the view ran—not that ingestion is complete. `QueryFailed` does not identify which dependency failed; use separate `Assess` probes. Exports reuse query outcomes rather than run extra health queries.
+
+The manifest records optional-hunting flags, list counts, the configured activity window, the 30-day app-posture window, and the longer Teams alert context window. Views run sequentially using their existing relative query windows; collection is **not an atomic snapshot**. API row/time/resource limits and ingestion delays still apply. Warnings, continuation indicators and returned row counts at or above 100,000 are flagged, but absence of an indicator does not prove completeness. No pagination, automatic retry, time slicing or scheduled collection is introduced.
 
 CSV quotes every field and prefixes formula-like values with an apostrophe, including values beginning with whitespace before `=`, `+`, `-` or `@`. JSON preserves the original values. HTML encodes result text and uses a restrictive content policy. These are safer handoff formats, not a substitute for treating exported evidence as untrusted data.
 
@@ -224,9 +263,9 @@ Graph does not document an atomic conditional-write contract for these operation
 
 ## Validation
 
-Package-creation validation results:
+November 18 validation of the initial November 17 visibility update:
 
-- **Passed:** all 20 offline Python contract tests (including results-export configuration, dispatch and report-safety contracts) and PowerShell syntax parsing of the module, launcher and mocked test suite.
+- **Passed:** all 23 offline Python contract tests (including application-identity boundaries, optional coverage/source classification, GitHub identifiers and results-export safety) and PowerShell syntax parsing of the module, launcher and mocked test suite. Detection definitions and their two KQL templates are unchanged from the published baseline.
 - **Blocked:** execution of the mocked PowerShell suite because the unsigned scripts are blocked by this device's script-signing policy. Runtime deployment and rollback behavior remain unverified; sign the scripts and module through your trusted process before running the suite.
 - **Not performed:** live KQL compilation, tenant assessment, detection deployment and end-to-end detection testing. These require authorized tenant configuration and access.
 

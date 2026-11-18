@@ -23,7 +23,16 @@ try {
         }
         function Clone-Test($Value) { ConvertFrom-CavJson (ConvertTo-Json -InputObject $Value -Depth 40) }
         $context=Read-CavContext (Join-Path $script:PackageRoot 'config.example.json')
-        Assert-Test (@($context.Catalog.Queries).Count -eq 9) 'Nine hunting queries'
+        $legacy=Clone-Test $context.Config
+        foreach ($name in @('EnableApplicationIdentityHunting','EnableGitHubHunting','GitHubApplicationNames','NativeGitHubAlertTitles')) { $legacy.PSObject.Properties.Remove($name) }
+        $legacyPath=Write-CavFile (Join-Path $OutputPath 'legacy-config.json') ($legacy | ConvertTo-Json -Depth 15)
+        $legacyContext=Read-CavContext $legacyPath
+        Assert-Test (-not $legacyContext.Config.EnableApplicationIdentityHunting -and -not $legacyContext.Config.EnableGitHubHunting) 'Legacy config defaults optional hunting off'
+        Assert-Test ($legacyContext.Config.GitHubApplicationNames.Count -eq 0) 'Legacy config gets empty GitHub lists'
+        $badOptional=Clone-Test $context.Config; $badOptional.EnableGitHubHunting='true'
+        $badOptionalPath=Write-CavFile (Join-Path $OutputPath 'bad-optional.json') ($badOptional | ConvertTo-Json -Depth 15)
+        Assert-Throws { Read-CavContext $badOptionalPath } 'JSON boolean'
+        Assert-Test (@($context.Catalog.Queries).Count -eq 14) 'Fourteen hunting queries'
         $plan=Get-CavPlan $context ''
         Assert-Test ($plan.NetworkRequests -eq 0) 'Offline plan'
         foreach ($rule in $plan.Rules) {
@@ -70,11 +79,12 @@ try {
         $configPath=Write-CavFile (Join-Path $OutputPath 'tenant-fixture.json') ($context.Config | ConvertTo-Json -Depth 15)
 
         $script:Store=@{}; $script:Requests=0; $script:Writes=0; $script:FailReadback=$false; $script:FailHealth=$false
-        $script:ExportFixture=$false; $script:MalformedExport=$false
+        $script:ExportFixture=$false; $script:MalformedExport=$false; $script:FailGraph=$false
         function script:Invoke-CavGraph {
             param([string]$Method,[string]$Uri,[Security.SecureString]$AccessToken,$Body)
             $script:Requests++
             if ($Uri.EndsWith('/runHuntingQuery')) {
+                if ($script:FailGraph -and $Body.Query -match 'GraphAPIAuditEvents') { throw 'Fixture: Graph table unavailable' }
                 if ($script:MalformedExport) { return [pscustomobject]@{ results=@() } }
                 if ($script:ExportFixture) {
                     if ($Body.Query -match '^OAuthAppInfo') { throw 'Fixture: app metadata unavailable' }
@@ -121,7 +131,7 @@ try {
         $null=Invoke-CavCommand -Mode Deploy -RuleId cav-teams-endpoint-v1 -ConfigPath $configPath -WhatIf
         Assert-Test ($script:Requests -eq $beforeRequests) 'WhatIf makes no Graph requests'
         $exports=@(Invoke-CavCommand -Mode Export -ConfigPath $configPath -OutputDirectory $OutputPath -Confirm:$false)
-        Assert-Test ($exports.Count -eq 10) 'Nine configured views and one plan exported'
+        Assert-Test ($exports.Count -eq 15) 'Fourteen configured views and one plan exported'
         foreach ($path in $exports) { Assert-Test ((Get-CavZoneId $path) -in 3,4) 'Export metadata verified' }
         $script:FailHealth=$true
         $assessment=Invoke-CavCommand -Mode Assess -ConfigPath $configPath -AccessToken $token -IncludeRuleInventory
@@ -140,7 +150,7 @@ try {
         $script:ExportFixture=$true
         $bundle=Invoke-CavCommand -Mode ExportResults -ConfigPath $configPath -AccessToken $token -OutputDirectory $OutputPath -Confirm:$false
         Assert-Test ($bundle.Status -eq 'CompletedWithQueryFailures') 'Failed result views do not stop the bundle'
-        Assert-Test (@($bundle.Files).Count -eq 29) 'Nine CSV/JSON/KQL sets, HTML and manifest'
+        Assert-Test (@($bundle.Files).Count -eq 44) 'Fourteen CSV/JSON/KQL sets, HTML and manifest'
         Assert-Test ($script:Requests-$beforeRequests -eq 8) 'Unconfigured remediation view skipped before requests'
         Assert-Test ($script:Writes -eq 0) 'Results export never mutates tenant rules'
         foreach ($path in $bundle.Files) { Assert-Test ((Get-CavZoneId $path) -in 3,4) 'Result output metadata verified' }
@@ -148,7 +158,7 @@ try {
         Assert-Test ($manifest.TenantId -eq $tenant -and $manifest.Context.LookbackDays -eq 7) 'Manifest records tenant and query window'
         Assert-Test (@($manifest.Views | Where-Object { $_.Status -eq 'ResultsReturned' }).Count -eq 1) 'Data view distinguished'
         Assert-Test (@($manifest.Views | Where-Object { $_.Status -eq 'QueryFailed' }).Count -eq 1) 'Failed view distinguished'
-        Assert-Test (@($manifest.Views | Where-Object { $_.Status -eq 'NotConfigured' }).Count -eq 1) 'Missing configuration distinguished'
+        Assert-Test (@($manifest.Views | Where-Object { $_.Status -eq 'NotConfigured' }).Count -eq 6) 'Missing configuration and disabled optional views distinguished'
         Assert-Test (@($manifest.Views | Where-Object { $_.Status -eq 'NoResults' }).Count -eq 6) 'Empty results distinguished'
         $html=Get-Content -LiteralPath $bundle.DashboardPath -Raw
         Assert-Test ($html -notmatch '<script>' -and $html.Contains('&lt;script&gt;')) 'HTML encodes hostile result values'
@@ -169,6 +179,30 @@ try {
         }
         $emptyCsv=ConvertTo-CavCsv -Schema @([pscustomobject]@{name='Column'}) -Rows @()
         Assert-Test ($emptyCsv -ceq "`"Column`"`r`n") 'Empty successful query keeps CSV schema header'
+
+        $beforeRequests=$script:Requests
+        Assert-Throws { Invoke-CavCommand -Mode Hunt -QueryId app-graph-timeline -ConfigPath $configPath -AccessToken $token } 'Optional hunting disabled'
+        Assert-Test ($script:Requests -eq $beforeRequests) 'Disabled Hunt performs no request'
+        Assert-Test (@($assessment.QueryChecks | Where-Object { $_.Status -eq 'NotConfigured' }).Count -eq 5) 'Assessment skips disabled optional views'
+        Assert-Test (@($assessment.TableHealth | Where-Object { $_.Table -eq 'GraphAPIAuditEvents' }).Count -eq 0) 'Default assessment does not probe optional Graph table'
+        Assert-Test ($manifest.SchemaVersion -eq 2 -and $manifest.EvidenceAsOf -eq '2026-11-17') 'Manifest identifies expanded coverage schema and evidence date'
+        $githubCoverage=@($manifest.Views | Where-Object { $_.QueryId -eq 'github-alert-context' })[0].Coverage
+        Assert-Test ($githubCoverage.Evidence[0].EvidenceType -eq 'LabDemonstration') 'Lab evidence remains labeled in report'
+        Assert-Test ($html.Contains('Required telemetry:') -and $html.Contains('LabDemonstration')) 'HTML renders telemetry and evidence distinctions'
+        $enabled=Clone-Test $context.Config
+        $enabled.EnableApplicationIdentityHunting=$true; $enabled.EnableGitHubHunting=$true
+        $enabled.GitHubApplicationNames=@('Observed GitHub connector name')
+        $enabled.NativeGitHubAlertTitles=@('Reviewed native GitHub test alert')
+        $enabledPath=Write-CavFile (Join-Path $OutputPath 'optional-enabled.json') ($enabled | ConvertTo-Json -Depth 15)
+        $script:FailGraph=$true
+        $optionalReport=Invoke-CavCommand -Mode Assess -ConfigPath $enabledPath -AccessToken $token
+        Assert-Test (@($optionalReport.TableHealth | Where-Object { $_.Table -eq 'GraphAPIAuditEvents' -and $_.Status -eq 'UnavailableOrQueryFailed' }).Count -eq 1) 'Optional Graph table failure isolated'
+        Assert-Test (@($optionalReport.QueryChecks | Where-Object { $_.QueryId -eq 'app-graph-timeline' -and $_.Status -eq 'Failed' }).Count -eq 1) 'Combined timeline fails honestly with missing Graph source'
+        $optionalBundle=Invoke-CavCommand -Mode ExportResults -ConfigPath $enabledPath -AccessToken $token -OutputDirectory $OutputPath -Confirm:$false
+        Assert-Test (@($optionalBundle.Views | Where-Object { $_.QueryId -eq 'app-graph-timeline' -and $_.Status -eq 'QueryFailed' }).Count -eq 1) 'Export preserves missing optional telemetry failure'
+        Assert-Test (@($optionalBundle.Views | Where-Object { $_.QueryId -eq 'github-operations' -and $_.Status -eq 'NoResults' }).Count -eq 1) 'Unrelated optional view continues'
+        Assert-Test ($script:Writes -eq 0) 'New views remain read-only'
+        $script:FailGraph=$false
 
         $params=@{ Mode='Deploy'; ConfigPath=$configPath; AccessToken=$token; RuleId='cav-teams-endpoint-v1'; OutputDirectory=$OutputPath; Confirm=$false }
         Assert-Throws { Invoke-CavCommand @params } 'OverlapReviewed'
